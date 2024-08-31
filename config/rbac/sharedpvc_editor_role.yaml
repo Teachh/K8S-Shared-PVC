@@ -1,0 +1,27 @@
+# permissions for end users to edit sharedpvcs.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: k8s-shared-pvc
+    app.kubernetes.io/managed-by: kustomize
+  name: sharedpvc-editor-role
+rules:
+- apiGroups:
+  - crd.hector.dev
+  resources:
+  - sharedpvcs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - crd.hector.dev
+  resources:
+  - sharedpvcs/status
+  verbs:
+  - get

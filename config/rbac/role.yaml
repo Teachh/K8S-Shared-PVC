@@ -1,0 +1,45 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: manager-role
+rules:
+- apiGroups:
+  - crd.hector.dev
+  resources:
+  - persistentvolumeclaims
+  - pods
+  - sharedpvcs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - crd.hector.dev
+  resources:
+  - sharedpvcs/events
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - crd.hector.dev
+  resources:
+  - sharedpvcs/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - crd.hector.dev
+  resources:
+  - sharedpvcs/status
+  verbs:
+  - get
+  - patch
+  - update
