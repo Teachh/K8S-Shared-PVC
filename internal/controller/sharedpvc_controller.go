@@ -18,7 +18,9 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
@@ -58,16 +60,20 @@ func (r *SharedPVCReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	l.Info(fmt.Sprintf("I've found: %s", sharedpvc.Name))
 	// Modify in the future to not allow creating the manifest
 	l.Info("Finding PVC")
-	if err := r.checkIfPVCEsxists(ctx, sharedpvc); err != nil {
-		l.Error(err, "PVC does not exists")
+	if err := r.checkIfPVCExists(ctx, sharedpvc); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+	l.Info("Checking if the PVC can be mounted")
+	if err := r.checkIfPVCCanBeMounted(ctx, sharedpvc); err != nil {
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
 	l.Info("Reconciliation Compelte!")
 
 	return ctrl.Result{}, nil
 }
 
-func (r *SharedPVCReconciler) checkIfPVCEsxists(ctx context.Context, sharedpvc *crdv1.SharedPVC) error {
+func (r *SharedPVCReconciler) checkIfPVCExists(ctx context.Context, sharedpvc *crdv1.SharedPVC) error {
 	l := log.FromContext(ctx)
 	pvc := &corev1.PersistentVolumeClaim{}
 	namespace := sharedpvc.Spec.NewPVC.OriginalNamespace
@@ -84,6 +90,36 @@ func (r *SharedPVCReconciler) checkIfPVCEsxists(ctx context.Context, sharedpvc *
 		return err
 	}
 
+	return nil
+}
+
+func (r *SharedPVCReconciler) checkIfPVCCanBeMounted(ctx context.Context, sharedpvc *crdv1.SharedPVC) error {
+	l := log.FromContext(ctx)
+	pvc := &corev1.PersistentVolumeClaim{}
+	namespace := sharedpvc.Spec.NewPVC.OriginalNamespace
+	name := sharedpvc.Spec.NewPVC.OriginalPVCName
+	// Check if exists
+	if err := r.Get(ctx, client.ObjectKey{Namespace: namespace, Name: name}, pvc); err != nil {
+		l.Error(err, fmt.Sprintf("Failed to find the PVC: %s", name))
+		return err
+	}
+
+	podList := &corev1.PodList{}
+	if err := r.Client.List(ctx, podList, &client.ListOptions{Namespace: pvc.Namespace}); err != nil {
+		l.Error(err, "Error listing the pods")
+		return err
+	}
+
+	// Iterate over each Pod to check if it is using the PVC
+	for _, pod := range podList.Items {
+		for _, volume := range pod.Spec.Volumes {
+			// Check last position
+			if volume.PersistentVolumeClaim != nil && volume.PersistentVolumeClaim.ClaimName == pvc.Name && !strings.Contains(string(pvc.Spec.AccessModes[len(pvc.Spec.AccessModes)-1]), "Only") {
+				err := errors.New("PVC can not be used, check the Access mode and if it is already mounted")
+				l.Error(err, "Error mounting the PVC")
+			}
+		}
+	}
 	return nil
 }
 
